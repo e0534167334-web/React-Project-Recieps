@@ -1,0 +1,202 @@
+// סכמת מסד הנתונים של "שיתוף מתכונים"
+// כל שינוי כאן דורש Migration חדשה (ראו README.md)
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum KosherType {
+  MEAT
+  DAIRY
+  PAREVE
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  NEW_ANSWER
+  CONTENT_APPROVED
+  CONTENT_REJECTED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(254)
+  passwordHash String   @db.VarChar(100)
+  displayName  String   @db.VarChar(40)
+  role         Role     @default(USER)
+  contactEmail String?  @db.VarChar(254)
+  contactPhone String?  @db.VarChar(20)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  recipes       Recipe[]
+  savedRecipes  SavedRecipe[]
+  questions     ForumQuestion[]
+  answers       ForumAnswer[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(40)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipes   Recipe[]
+  questions ForumQuestion[]
+
+  @@map("categories")
+}
+
+model Recipe {
+  id              Int              @id @default(autoincrement())
+  title           String           @db.VarChar(100)
+  description     String?          @db.VarChar(500)
+  instructions    String
+  categoryId      Int
+  difficulty      Difficulty
+  kosherType      KosherType
+  prepTimeMinutes Int?
+  servings        Int?
+  imageUrl        String?          @db.VarChar(1000)
+  imagePath       String?          @db.VarChar(500)
+  videoUrl        String?          @db.VarChar(1000)
+  visibility      Visibility       @default(PUBLIC)
+  status          ModerationStatus @default(APPROVED)
+  rejectionReason String?          @db.VarChar(300)
+  showContact     Boolean          @default(false)
+  authorId        Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  category    Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  author      User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  ingredients RecipeIngredient[]
+  savedBy     SavedRecipe[]
+  questions   ForumQuestion[]
+
+  @@index([status, visibility, categoryId])
+  @@index([createdAt])
+  @@index([authorId])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id       Int    @id @default(autoincrement())
+  recipeId Int
+  text     String @db.VarChar(200)
+  position Int
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, position])
+  @@map("recipe_ingredients")
+}
+
+model SavedRecipe {
+  userId    Int
+  recipeId  Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, recipeId])
+  @@index([recipeId])
+  @@map("saved_recipes")
+}
+
+model ForumQuestion {
+  id              Int              @id @default(autoincrement())
+  title           String           @db.VarChar(150)
+  body            String
+  categoryId      Int?
+  recipeId        Int?
+  imageUrl        String?          @db.VarChar(1000)
+  imagePath       String?          @db.VarChar(500)
+  videoUrl        String?          @db.VarChar(1000)
+  isSolved        Boolean          @default(false)
+  status          ModerationStatus @default(APPROVED)
+  rejectionReason String?          @db.VarChar(300)
+  showContact     Boolean          @default(false)
+  authorId        Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  category Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  recipe   Recipe?       @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  answers  ForumAnswer[]
+
+  @@index([status, isSolved, createdAt])
+  @@index([authorId])
+  @@map("forum_questions")
+}
+
+model ForumAnswer {
+  id              Int              @id @default(autoincrement())
+  questionId      Int
+  body            String
+  imageUrl        String?          @db.VarChar(1000)
+  imagePath       String?          @db.VarChar(500)
+  videoUrl        String?          @db.VarChar(1000)
+  status          ModerationStatus @default(APPROVED)
+  rejectionReason String?          @db.VarChar(300)
+  showContact     Boolean          @default(false)
+  authorId        Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  question ForumQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([authorId])
+  @@map("forum_answers")
+}
+
+model Notification {
+  id         Int              @id @default(autoincrement())
+  userId     Int
+  type       NotificationType
+  message    String           @db.VarChar(300)
+  entityType String           @db.VarChar(20)
+  entityId   Int
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
